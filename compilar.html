@@ -1,22 +1,31 @@
 <!DOCTYPE html>
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Compilar marcador</title>
-<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image.prod.js"></script>
-<style>body{font-family:sans-serif;max-width:560px;margin:2rem auto;padding:0 1rem}</style></head>
+<style>body{font-family:sans-serif;max-width:560px;margin:2rem auto;padding:0 1rem}#s{white-space:pre-wrap}</style></head>
 <body>
 <h2>Compilar marcador → targets.mind</h2>
-<p>Elegí la imagen del tatuaje (PNG/JPG). Se descarga <b>targets.mind</b>; ponelo junto a index.html.</p>
-<input type="file" id="f" accept="image/*"><p id="s"></p>
+<p>Elegí la imagen (PNG/JPG). Se descarga <b>targets.mind</b>.</p>
+<p id="lib">Cargando librería…</p>
+<input type="file" id="f" accept="image/*" disabled><p id="s"></p>
 <script>
-document.getElementById('f').onchange = async e => {
-  const s = document.getElementById('s');
-  const img = new Image(); img.src = URL.createObjectURL(e.target.files[0]);
-  await img.decode();
-  const c = new window.MINDAR.IMAGE.Compiler();
-  await c.compileImageTargets([img], p => s.textContent = 'Compilando… ' + p.toFixed(0) + '%');
-  const buf = await c.exportData();
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([buf])); a.download = 'targets.mind'; a.click();
-  s.textContent = 'Listo: targets.mind descargado.';
+const s = document.getElementById('s'), lib = document.getElementById('lib'), f = document.getElementById('f');
+function cargar(url){return new Promise((ok,no)=>{const t=document.createElement('script');t.src=url;t.onload=ok;t.onerror=()=>no(url);document.head.appendChild(t);});}
+(async()=>{
+  const urls=['https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image.prod.js','https://unpkg.com/mind-ar@1.2.5/dist/mindar-image.prod.js'];
+  for(const u of urls){ try{ await cargar(u); if(window.MINDAR){ lib.textContent='Librería lista ✔'; f.disabled=false; return; } }catch(e){} }
+  lib.textContent='❌ No se pudo cargar la librería. Revisá tu conexión o probá en Chrome.';
+})();
+f.onchange = async e => {
+  try{
+    s.textContent='Leyendo imagen…';
+    const img = new Image(); img.src = URL.createObjectURL(e.target.files[0]); await img.decode();
+    s.textContent='Compilando… (puede tardar 1-2 min, no cierres)';
+    const c = new window.MINDAR.IMAGE.Compiler();
+    await c.compileImageTargets([img], p => s.textContent = 'Compilando… ' + p.toFixed(0) + '%');
+    const buf = await c.exportData();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([buf])); a.download = 'targets.mind'; a.click();
+    s.textContent = '✔ Listo: targets.mind descargado.';
+  }catch(err){ s.textContent = '❌ Error: ' + (err && err.message || err); console.error(err); }
 };
 </script></body></html>
