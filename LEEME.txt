@@ -1,0 +1,7 @@
+PROTOTIPO AR CON IMAGEN COMO MARCADOR
+1) Abrí compilar.html (desde GitHub Pages/Netlify, o doble clic), elegí tu imagen y descargá targets.mind.
+   (Incluí marcador.png de ejemplo: imprimilo para probar.)
+2) Poné targets.mind en esta carpeta, junto a index.html.
+3) Subí la carpeta a GitHub Pages o Netlify (HTTPS obligatorio para la cámara).
+4) Abrí la URL en el celular, permití la cámara y apuntá al marcador: aparece overlay.png.
+Para cambiar lo que aparece: reemplazá overlay.png.
