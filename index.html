@@ -17,7 +17,7 @@
 <script>
 /* ============ EDITÁ SOLO ESTA PARTE ============ */
 const PERFIL = {
-  foto:   "foto.png",
+  cuerpo: "cuerpo.png",                     // tu imagen de cuerpo completo (fondo transparente)
   nombre: "Sebastián Martínez",
   rol:    "Diseñador gráfico · Programador",
   datos: [                                  // [ETIQUETA, valor] – hasta 4 filas
@@ -32,13 +32,16 @@ const PERFIL = {
     { n: "GitHub",    u: "https://github.com/sebamartinezdg" }
   ]
 };
-const TARJETA_Y = 1.45;   // altura de la tarjeta sobre el tatuaje (1 = ancho del tatuaje). Subila o bajala.
-const ESCALA    = 1;      // tamaño general de toda la interfaz
+const LADO     = -1;    // -1 = el panel sale hacia la izquierda del tatuaje, 1 = hacia la derecha
+const DISTANCIA = 1.45; // qué tan lejos del centro del tatuaje queda el panel
+const ALTURA   = 0.14;  // cuánto "levita" sobre la piel
+const ESCALA   = 1;     // tamaño general de la interfaz
 /* ================================================= */
 
 const THREE = AFRAME.THREE;
-const CW = 1024, CH = 750, U = 1.5 / CW;   // tarjeta: 1.5 unidades de ancho
+const PW = 1.8, PH = 1.0, CW = 1440, CH = 800, U = PW / CW;   // panel: 1.8 x 1.0 unidades
 const CYAN = '0,229,255';
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
 function rr(c, x, y, w, h, r) {
   c.beginPath(); c.moveTo(x + r, y);
@@ -67,96 +70,130 @@ function espaciado(c, px) { if ('letterSpacing' in c) c.letterSpacing = px + 'px
 
 const target = document.getElementById('target');
 const grupo = document.createElement('a-entity');
-grupo.setAttribute('scale', '0.01 0.01 0.01');
-grupo.setAttribute('animation__in', 'property: scale; from: 0.01 0.01 0.01; to: ' + ESCALA + ' ' + ESCALA + ' ' + ESCALA +
-  '; dur: 800; easing: easeOutBack; startEvents: aparecer');
+grupo.setAttribute('scale', ESCALA + ' ' + ESCALA + ' ' + ESCALA);
 target.appendChild(grupo);
 
-/* --- Anillos alrededor del tatuaje --- */
+/* --- Anillos sobre el tatuaje --- */
+const anillos = document.createElement('a-entity');
+anillos.setAttribute('scale', '0.01 0.01 0.01');
+anillos.setAttribute('animation__in', 'property: scale; from: 0.01 0.01 0.01; to: 1 1 1; dur: 700; easing: easeOutBack; startEvents: aparecer');
+grupo.appendChild(anillos);
 function anillo(r, dash, ancho, alfa, giro, dur) {
-  const p = planoCanvas(grupo, { w: 1.5, h: 1.5, cw: 512, ch: 512, pos: '0 0 0.02' });
+  const p = planoCanvas(anillos, { w: 1.5, h: 1.5, cw: 512, ch: 512, pos: '0 0 0.02' });
   const c = p.ctx; c.strokeStyle = 'rgba(' + CYAN + ',' + alfa + ')'; c.lineWidth = ancho;
   c.shadowColor = '#00e5ff'; c.shadowBlur = 12; c.setLineDash(dash);
   c.beginPath(); c.arc(256, 256, r, 0, Math.PI * 2); c.stroke();
   p.el.setAttribute('animation__rot', 'property: rotation; to: 0 0 ' + giro + '; dur: ' + dur + '; loop: true; easing: linear');
-  return p;
 }
 anillo(238, [22, 14], 5, 0.95, 360, 14000);
 anillo(212, [80, 50], 3, 0.6, -360, 9000);
-const pulso = planoCanvas(grupo, { w: 1.5, h: 1.5, cw: 512, ch: 512, pos: '0 0 0.015' });
-pulso.ctx.strokeStyle = 'rgba(' + CYAN + ',0.35)'; pulso.ctx.lineWidth = 2;
-pulso.ctx.beginPath(); pulso.ctx.arc(256, 256, 250, 0, Math.PI * 2); pulso.ctx.stroke();
-pulso.el.setAttribute('animation__pulse', 'property: scale; from: 1 1 1; to: 1.06 1.06 1.06; dir: alternate; dur: 1100; loop: true; easing: easeInOutSine');
 
-/* --- Línea que une el tatuaje con la tarjeta --- */
-const yBase = 0.72, yTarj = TARJETA_Y - 0.55;
-const lin = document.createElement('a-plane');
-lin.setAttribute('width', 0.012); lin.setAttribute('height', Math.max(yTarj - yBase, 0.02));
-lin.setAttribute('position', '0 ' + ((yBase + yTarj) / 2) + ' 0.04');
-lin.setAttribute('material', 'shader: flat; color: #00e5ff; opacity: 0.85; transparent: true');
-grupo.appendChild(lin);
+/* --- Panel que sale del tatuaje y levita --- */
+const panelOut = document.createElement('a-entity');
+panelOut.setAttribute('position', '0 0 0');
+panelOut.setAttribute('scale', '0.05 0.05 0.05');
+panelOut.setAttribute('animation__pos', 'property: position; from: 0 0 0; to: ' + (LADO * DISTANCIA) + ' 0 ' + ALTURA +
+  '; dur: 1200; easing: easeOutCubic; startEvents: aparecer');
+panelOut.setAttribute('animation__esc', 'property: scale; from: 0.05 0.05 0.05; to: 1 1 1; dur: 1000; easing: easeOutCubic; startEvents: aparecer');
+grupo.appendChild(panelOut);
+const panelIn = document.createElement('a-entity');
+panelIn.setAttribute('animation__bob', 'property: position; from: 0 0 0; to: 0 0 0.035; dir: alternate; loop: true; dur: 1800; easing: easeInOutSine');
+panelOut.appendChild(panelIn);
 
-/* --- Tarjeta --- */
-const card = planoCanvas(grupo, { w: 1.5, h: CH * U, cw: CW, ch: CH, pos: '0 ' + TARJETA_Y + ' 0.05' });
-const foto = new Image(); let fotoOK = false;
-foto.onload = () => { fotoOK = true; }; foto.src = PERFIL.foto;
+const card = planoCanvas(panelIn, { w: PW, h: PH, cw: CW, ch: CH, pos: '0 0 0' });
 
+/* Capa estática (fondo, textos, datos): se dibuja una sola vez */
+const estatico = document.createElement('canvas'); estatico.width = CW; estatico.height = CH;
 function esquina(c, x, y, dx, dy) {
-  c.beginPath(); c.moveTo(x, y + dy * 46); c.lineTo(x, y); c.lineTo(x + dx * 46, y); c.stroke();
+  c.beginPath(); c.moveTo(x, y + dy * 50); c.lineTo(x, y); c.lineTo(x + dx * 50, y); c.stroke();
 }
-function dibujarCard(t) {
-  const c = card.ctx; c.clearRect(0, 0, CW, CH);
-  c.save(); rr(c, 8, 8, CW - 16, CH - 16, 26);
-  const g = c.createLinearGradient(0, 0, CW * 0.4, CH);
-  g.addColorStop(0, 'rgba(0,34,52,0.88)'); g.addColorStop(1, 'rgba(0,10,20,0.92)');
+function dibujarEstatico() {
+  const c = estatico.getContext('2d'); c.clearRect(0, 0, CW, CH);
+  c.save(); rr(c, 8, 8, CW - 16, CH - 16, 28);
+  const g = c.createLinearGradient(0, 0, CW * 0.5, CH);
+  g.addColorStop(0, 'rgba(0,44,62,0.60)'); g.addColorStop(1, 'rgba(0,14,24,0.74)');
   c.fillStyle = g; c.fill();
-  c.shadowColor = '#00e5ff'; c.shadowBlur = 22; c.lineWidth = 3; c.strokeStyle = 'rgba(' + CYAN + ',0.8)'; c.stroke();
+  c.shadowColor = '#00e5ff'; c.shadowBlur = 22; c.lineWidth = 3; c.strokeStyle = 'rgba(' + CYAN + ',0.85)'; c.stroke();
   c.restore();
-
-  c.save(); rr(c, 8, 8, CW - 16, CH - 16, 26); c.clip();
+  c.save(); rr(c, 8, 8, CW - 16, CH - 16, 28); c.clip();
   c.strokeStyle = 'rgba(' + CYAN + ',0.05)'; c.lineWidth = 1;
   for (let y = 20; y < CH; y += 26) { c.beginPath(); c.moveTo(0, y); c.lineTo(CW, y); c.stroke(); }
+  c.restore();
+  c.strokeStyle = '#00e5ff'; c.lineWidth = 5;
+  esquina(c, 24, 24, 1, 1); esquina(c, CW - 24, 24, -1, 1); esquina(c, 24, CH - 24, 1, -1); esquina(c, CW - 24, CH - 24, -1, -1);
+  const dv = c.createLinearGradient(0, 40, 0, CH - 40);
+  dv.addColorStop(0, 'rgba(' + CYAN + ',0)'); dv.addColorStop(0.5, 'rgba(' + CYAN + ',0.8)'); dv.addColorStop(1, 'rgba(' + CYAN + ',0)');
+  c.fillStyle = dv; c.fillRect(596, 40, 2, CH - 80);
+
+  const x0 = 620, xr = CW - 50;
+  c.textAlign = 'left'; c.fillStyle = 'rgba(' + CYAN + ',0.9)'; c.font = "600 21px 'Segoe UI', system-ui, sans-serif"; espaciado(c, 3);
+  c.fillText('ESCANEO COMPLETO · PERFIL ENCONTRADO', x0 + 32, 66); espaciado(c, 0);
+  c.save(); c.fillStyle = '#e8fdff'; c.shadowColor = '#00e5ff'; c.shadowBlur = 16;
+  ajustar(c, PERFIL.nombre, xr - x0, 64, 700); c.fillText(PERFIL.nombre, x0, 168); c.restore();
+  c.fillStyle = 'rgba(125,239,255,1)'; espaciado(c, 3);
+  const rol = PERFIL.rol.toUpperCase(); ajustar(c, rol, xr - x0, 27, 500); c.fillText(rol, x0 + 2, 218); espaciado(c, 0);
+  PERFIL.datos.slice(0, 4).forEach(([k, v], i) => {
+    const y = 310 + i * 56;
+    c.strokeStyle = 'rgba(' + CYAN + ',0.22)'; c.lineWidth = 1;
+    c.beginPath(); c.moveTo(x0, y - 34); c.lineTo(xr, y - 34); c.stroke();
+    c.textAlign = 'left'; c.fillStyle = 'rgba(' + CYAN + ',0.85)'; c.font = "600 20px 'Segoe UI', system-ui, sans-serif"; espaciado(c, 3);
+    c.fillText(k, x0, y); espaciado(c, 0);
+    c.textAlign = 'right'; c.fillStyle = '#e8fdff'; ajustar(c, v, 520, 29, 400); c.fillText(v, xr, y);
+  });
+}
+
+/* Cuerpo completo con efecto holograma (se prepara una sola vez) */
+const BH = 735, BY = 32, BX = 44, PAD = 30;
+let cuerpo = null, BW = 0;
+const img = new Image();
+img.onload = () => {
+  BW = Math.round(BH * img.width / img.height);
+  const o = document.createElement('canvas'); o.width = BW + PAD * 2; o.height = BH + PAD * 2;
+  const c = o.getContext('2d');
+  c.shadowColor = '#00e5ff'; c.shadowBlur = 24; c.drawImage(img, PAD, PAD, BW, BH);
+  c.shadowBlur = 0; c.drawImage(img, PAD, PAD, BW, BH);
+  c.globalCompositeOperation = 'source-atop';
+  c.fillStyle = 'rgba(' + CYAN + ',0.14)'; c.fillRect(0, 0, o.width, o.height);
+  c.fillStyle = 'rgba(0,20,30,0.22)';
+  for (let y = 0; y < o.height; y += 4) c.fillRect(0, y, o.width, 1);
+  cuerpo = o;
+};
+img.src = PERFIL.cuerpo;
+
+let tFound = 0;
+function dibujar(t) {
+  const c = card.ctx; c.clearRect(0, 0, CW, CH);
+  c.drawImage(estatico, 0, 0);
+  const tr = t - tFound;
+
+  c.save(); rr(c, 8, 8, CW - 16, CH - 16, 28); c.clip();
   const sy = ((t * 0.22) % 1) * CH;
   const sg = c.createLinearGradient(0, 0, CW, 0);
-  sg.addColorStop(0, 'rgba(' + CYAN + ',0)'); sg.addColorStop(0.5, 'rgba(' + CYAN + ',0.9)'); sg.addColorStop(1, 'rgba(' + CYAN + ',0)');
+  sg.addColorStop(0, 'rgba(' + CYAN + ',0)'); sg.addColorStop(0.5, 'rgba(' + CYAN + ',0.85)'); sg.addColorStop(1, 'rgba(' + CYAN + ',0)');
   c.fillStyle = sg; c.fillRect(0, sy, CW, 3);
-  const sg2 = c.createLinearGradient(0, sy - 60, 0, sy);
-  sg2.addColorStop(0, 'rgba(' + CYAN + ',0)'); sg2.addColorStop(1, 'rgba(' + CYAN + ',0.10)');
-  c.fillStyle = sg2; c.fillRect(0, sy - 60, CW, 60);
+  const sg2 = c.createLinearGradient(0, sy - 70, 0, sy);
+  sg2.addColorStop(0, 'rgba(' + CYAN + ',0)'); sg2.addColorStop(1, 'rgba(' + CYAN + ',0.09)');
+  c.fillStyle = sg2; c.fillRect(0, sy - 70, CW, 70);
   c.restore();
-
-  c.strokeStyle = '#00e5ff'; c.lineWidth = 5;
-  esquina(c, 22, 22, 1, 1); esquina(c, CW - 22, 22, -1, 1); esquina(c, 22, CH - 22, 1, -1); esquina(c, CW - 22, CH - 22, -1, -1);
 
   c.fillStyle = 'rgba(61,255,154,' + (0.55 + 0.45 * Math.sin(t * 4)) + ')';
-  c.beginPath(); c.arc(56, 62, 8, 0, Math.PI * 2); c.fill();
-  c.fillStyle = 'rgba(' + CYAN + ',0.9)'; c.font = "600 20px 'Segoe UI', system-ui, sans-serif"; espaciado(c, 3);
-  c.textAlign = 'left'; c.fillText('ESCANEO COMPLETO · PERFIL ENCONTRADO', 76, 69); espaciado(c, 0);
+  c.beginPath(); c.arc(634, 59, 8, 0, Math.PI * 2); c.fill();
 
-  const px = 170, py = 250;
-  c.save(); c.beginPath(); c.arc(px, py, 98, 0, Math.PI * 2); c.fillStyle = 'rgba(0,45,66,0.9)'; c.fill(); c.clip();
-  if (fotoOK) c.drawImage(foto, px - 98, py - 98, 196, 196);
-  c.restore();
-  c.lineWidth = 4; c.strokeStyle = '#00e5ff'; c.beginPath(); c.arc(px, py, 100, 0, Math.PI * 2); c.stroke();
-  c.save(); c.translate(px, py); c.rotate(t * 0.8); c.setLineDash([16, 12]); c.lineWidth = 3;
-  c.strokeStyle = 'rgba(' + CYAN + ',0.9)'; c.beginPath(); c.arc(0, 0, 122, 0, Math.PI * 2); c.stroke(); c.restore();
-  c.save(); c.translate(px, py); c.rotate(-t * 1.3); c.setLineDash([60, 40]); c.lineWidth = 3;
-  c.strokeStyle = 'rgba(' + CYAN + ',0.5)'; c.beginPath(); c.arc(0, 0, 138, 0, Math.PI * 2); c.stroke(); c.restore();
-
-  c.textAlign = 'left'; c.fillStyle = '#e8fdff'; c.shadowColor = '#00e5ff'; c.shadowBlur = 14;
-  ajustar(c, PERFIL.nombre, 640, 48, 700); c.fillText(PERFIL.nombre, 330, 235);
-  c.shadowBlur = 0; c.fillStyle = 'rgba(125,239,255,1)'; espaciado(c, 2);
-  const rol = PERFIL.rol.toUpperCase(); ajustar(c, rol, 640, 25, 500); c.fillText(rol, 332, 282); espaciado(c, 0);
-
-  const y0 = 372;
-  PERFIL.datos.slice(0, 4).forEach(([k, v], i) => {
-    const y = y0 + i * 50;
-    c.strokeStyle = 'rgba(' + CYAN + ',0.22)'; c.lineWidth = 1;
-    c.beginPath(); c.moveTo(48, y - 30); c.lineTo(CW - 48, y - 30); c.stroke();
-    c.textAlign = 'left'; c.fillStyle = 'rgba(' + CYAN + ',0.85)'; c.font = "600 19px 'Segoe UI', system-ui, sans-serif"; espaciado(c, 3);
-    c.fillText(k, 48, y); espaciado(c, 0);
-    c.textAlign = 'right'; c.fillStyle = '#e8fdff'; ajustar(c, v, 620, 27, 400); c.fillText(v, CW - 48, y);
-  });
+  if (cuerpo) {
+    const p = clamp((tr - 0.5) / 1.6, 0, 1), e = 1 - Math.pow(1 - p, 3);
+    const gx = BX + BW / 2;
+    c.save(); c.globalAlpha = 0.5 + 0.35 * Math.sin(t * 2.5) * Math.sin(t * 2.5) + 0.15 * e;
+    c.fillStyle = 'rgba(' + CYAN + ',0.55)'; c.beginPath(); c.ellipse(gx, BY + BH + 6, BW * 0.55, 15, 0, 0, Math.PI * 2); c.fill(); c.restore();
+    const vis = BH * e, top = BY + BH - vis;
+    c.save(); c.beginPath(); c.rect(BX - PAD, top - PAD, BW + PAD * 2, vis + PAD * 2); c.clip();
+    c.globalAlpha = (0.88 + 0.12 * Math.sin(t * 23)) * (0.4 + 0.6 * e);
+    c.drawImage(cuerpo, BX - PAD, BY - PAD);
+    c.restore();
+    if (p < 1) {
+      c.fillStyle = 'rgba(180,250,255,0.95)'; c.shadowColor = '#00e5ff'; c.shadowBlur = 18;
+      c.fillRect(BX - 10, top, BW + 20, 3); c.shadowBlur = 0;
+    }
+  }
   card.tex.needsUpdate = true;
 }
 
@@ -164,19 +201,19 @@ function dibujarCard(t) {
 function dibujarBoton(b, label, presionado) {
   const c = b.ctx, w = b.canvas.width, h = b.canvas.height;
   c.clearRect(0, 0, w, h); rr(c, 4, 4, w - 8, h - 8, h * 0.2);
-  c.fillStyle = presionado ? 'rgba(' + CYAN + ',0.55)' : 'rgba(' + CYAN + ',0.14)'; c.fill();
+  c.fillStyle = presionado ? 'rgba(' + CYAN + ',0.55)' : 'rgba(' + CYAN + ',0.16)'; c.fill();
   c.shadowColor = '#00e5ff'; c.shadowBlur = presionado ? 20 : 8; c.lineWidth = 3; c.strokeStyle = 'rgba(' + CYAN + ',0.9)'; c.stroke();
   c.shadowBlur = 0; c.fillStyle = '#e8fdff'; c.textAlign = 'center'; c.textBaseline = 'middle'; espaciado(c, 2);
   ajustar(c, label.toUpperCase(), w - 24, h * 0.36, 600); c.fillText(label.toUpperCase(), w / 2, h / 2 + 2);
   espaciado(c, 0); c.textBaseline = 'alphabetic'; b.tex.needsUpdate = true;
 }
 const redes = PERFIL.redes.slice(0, 4), n = redes.length;
-const bw = (900 - (n - 1) * 20) / n, bh = 80;
+const bw = (770 - (n - 1) * 16) / n, bh = 84, byc = 690;
 redes.forEach((r, i) => {
-  const cx = 62 + bw / 2 + i * (bw + 20);
-  const b = planoCanvas(grupo, {
+  const cx = 620 + bw / 2 + i * (bw + 16);
+  const b = planoCanvas(panelIn, {
     w: bw * U, h: bh * U, cw: Math.round(bw * 1.5), ch: Math.round(bh * 1.5), clase: 'clickable',
-    pos: ((cx - CW / 2) * U) + ' ' + (TARJETA_Y + (CH / 2 - 640) * U) + ' 0.07'
+    pos: ((cx - CW / 2) * U) + ' ' + ((CH / 2 - byc) * U) + ' 0.03'
   });
   dibujarBoton(b, r.n, false);
   b.el.addEventListener('click', () => {
@@ -185,9 +222,17 @@ redes.forEach((r, i) => {
   });
 });
 
-/* --- Animación y aparición --- */
-dibujarCard(0);
-setInterval(() => { if (target.object3D.visible) dibujarCard(performance.now() / 1000); }, 60);
-target.addEventListener('targetFound', () => grupo.emit('aparecer'));
+/* --- Arranque --- */
+dibujarEstatico(); dibujar(0);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(dibujarEstatico);
+setInterval(() => { if (target.object3D.visible) dibujar(performance.now() / 1000); }, 60);
+let perdidoEn = -99;
+target.addEventListener('targetLost', () => { perdidoEn = performance.now() / 1000; });
+target.addEventListener('targetFound', () => {
+  const ahora = performance.now() / 1000;
+  if (ahora - perdidoEn > 1.5) {            // solo repite la animación si se perdió un rato
+    tFound = ahora; anillos.emit('aparecer'); panelOut.emit('aparecer');
+  }
+});
 </script>
 </body></html>
