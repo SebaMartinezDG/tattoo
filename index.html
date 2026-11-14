@@ -4,27 +4,109 @@
 <title>AR Tatuaje</title>
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
-<style>body{margin:0}</style></head>
+<style>
+  body{margin:0}
+  #hud{position:fixed;left:50%;bottom:4vh;width:min(92vw,380px);z-index:10;
+       transform:translateX(-50%) translateY(20px) scale(.94);opacity:0;pointer-events:none;
+       transition:opacity .5s, transform .5s;font-family:'Segoe UI',system-ui,sans-serif;color:#cffaff}
+  #hud.on{opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(0) scale(1)}
+  .card{position:relative;padding:18px 18px 16px;border-radius:10px;overflow:hidden;
+        background:linear-gradient(160deg,rgba(0,32,48,.84),rgba(0,12,22,.9));
+        border:1px solid rgba(0,229,255,.5);
+        box-shadow:0 0 26px rgba(0,229,255,.35),inset 0 0 34px rgba(0,229,255,.08);
+        backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+  .card::before,.card::after{content:"";position:absolute;width:16px;height:16px;border:2px solid #00e5ff}
+  .card::before{top:6px;left:6px;border-right:0;border-bottom:0}
+  .card::after{bottom:6px;right:6px;border-left:0;border-top:0}
+  .scan{position:absolute;left:0;right:0;top:0;height:2px;pointer-events:none;
+        background:linear-gradient(90deg,transparent,#00e5ff,transparent);opacity:.7;animation:scan 3.2s linear infinite}
+  @keyframes scan{0%{top:0}100%{top:100%}}
+  .estado{font-size:10px;letter-spacing:.18em;color:#00e5ff;opacity:.85;margin-bottom:12px}
+  .estado b{display:inline-block;width:7px;height:7px;border-radius:50%;background:#3dff9a;margin-right:6px;
+            box-shadow:0 0 8px #3dff9a;animation:blink 1.4s infinite}
+  @keyframes blink{50%{opacity:.3}}
+  .cab{display:flex;align-items:center;gap:14px}
+  .anillo{position:relative;width:88px;height:88px;flex:none}
+  .anillo::before{content:"";position:absolute;inset:-5px;border-radius:50%;border:2px dashed rgba(0,229,255,.8);animation:giro 9s linear infinite}
+  @keyframes giro{to{transform:rotate(360deg)}}
+  .anillo img{width:88px;height:88px;border-radius:50%;object-fit:cover;border:2px solid #00e5ff;background:#022;display:block}
+  .nombre{font-size:20px;font-weight:700;letter-spacing:.04em;line-height:1.15;text-shadow:0 0 10px rgba(0,229,255,.6)}
+  .rol{font-size:12px;letter-spacing:.1em;color:#7defff;margin-top:4px;text-transform:uppercase}
+  .datos{margin:14px 0 12px;border-top:1px solid rgba(0,229,255,.25)}
+  .fila{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid rgba(0,229,255,.15);font-size:13px}
+  .fila span:first-child{font-size:10px;letter-spacing:.16em;color:#00e5ff;opacity:.8;padding-top:2px}
+  .fila span:last-child{text-align:right}
+  .redes{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .redes a{display:block;text-align:center;padding:9px 6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;
+           color:#cffaff;text-decoration:none;border:1px solid rgba(0,229,255,.6);border-radius:6px;
+           background:rgba(0,229,255,.08);transition:.2s}
+  .redes a:active,.redes a:hover{background:rgba(0,229,255,.3);box-shadow:0 0 12px rgba(0,229,255,.6)}
+  .cerrar{position:absolute;top:8px;right:10px;z-index:2;background:none;border:0;color:#00e5ff;font-size:20px;line-height:1;padding:6px;cursor:pointer}
+</style></head>
 <body>
 <a-scene mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 1;" color-space="sRGB"
   renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false"
   device-orientation-permission-ui="enabled: false">
   <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-  <a-entity mindar-image-target="targetIndex: 0">
-    <!-- Ancho 1 = ancho del tatuaje. Para ponerlo ARRIBA: position="0 1.1 0.05" -->
-    <a-plane id="contenido" position="0 0 0.05" width="1" height="1" visible="false"
-      animation="property: scale; from: 0.95 0.95 0.95; to: 1.05 1.05 1.05; dir: alternate; dur: 1200; loop: true"></a-plane>
-  </a-entity>
+  <a-entity id="target" mindar-image-target="targetIndex: 0"></a-entity>
 </a-scene>
+
+<div id="hud"><div class="card">
+  <div class="scan"></div>
+  <button class="cerrar" id="cerrar" aria-label="Cerrar">✕</button>
+  <div class="estado"><b></b>ESCANEO COMPLETO · PERFIL ENCONTRADO</div>
+  <div class="cab">
+    <div class="anillo"><img id="foto" alt=""></div>
+    <div><div class="nombre" id="nombre"></div><div class="rol" id="rol"></div></div>
+  </div>
+  <div class="datos" id="datos"></div>
+  <div class="redes" id="redes"></div>
+</div></div>
+
 <script>
-// Carga overlay.png siempre fresco (sin caché) y ajusta la proporción sola.
-const plane = document.getElementById('contenido');
-const img = new Image();
-img.onload = () => {
-  plane.setAttribute('height', (img.naturalHeight / img.naturalWidth).toFixed(3));
-  plane.setAttribute('src', img.src);
-  plane.setAttribute('visible', 'true');
+/* ====== EDITÁ SOLO ESTA PARTE ====== */
+const PERFIL = {
+  foto:   "foto.png",                       // subí tu foto al repositorio con este nombre
+  nombre: "Sebastián Martínez",
+  rol:    "Diseñador gráfico · Programador",
+  datos: [                                  // [ETIQUETA, valor] – agregá o quitá filas
+    ["TÍTULO",  "Técnico en Ciencia de Datos e IA"],
+    ["ÁREAS",   "Fotografía · Diseño web · Docencia"],
+    ["EDAD",    "47"]
+  ],
+  redes: [                                  // pegá tus links reales
+    { n: "CV",        u: "https://PEGAR_LINK_DEL_CV" },
+    { n: "Instagram", u: "https://instagram.com/TU_USUARIO" },
+    { n: "Facebook",  u: "https://facebook.com/TU_USUARIO" },
+    { n: "GitHub",    u: "https://github.com/sebamartinezdg" }
+  ]
 };
-img.src = 'overlay.png?t=' + Date.now();
+/* ==================================== */
+
+const $ = id => document.getElementById(id);
+const hud = $('hud');
+$('nombre').textContent = PERFIL.nombre;
+$('rol').textContent = PERFIL.rol;
+$('foto').src = PERFIL.foto;
+$('foto').onerror = e => { e.target.style.visibility = 'hidden'; };
+PERFIL.datos.forEach(([k, v]) => {
+  const f = document.createElement('div'); f.className = 'fila';
+  const a = document.createElement('span'); a.textContent = k;
+  const b = document.createElement('span'); b.textContent = v;
+  f.append(a, b); $('datos').appendChild(f);
+});
+PERFIL.redes.forEach(r => {
+  const a = document.createElement('a');
+  a.href = r.u; a.target = '_blank'; a.rel = 'noopener'; a.textContent = r.n;
+  $('redes').appendChild(a);
+});
+
+// La tarjeta aparece al reconocer el tatuaje y se queda hasta que la cierres,
+// así podés tocar los botones aunque se mueva la cámara.
+let puedeMostrar = true;
+const t = $('target');
+t.addEventListener('targetFound', () => { if (puedeMostrar) { hud.classList.add('on'); puedeMostrar = false; } });
+t.addEventListener('targetLost',  () => { puedeMostrar = true; });
+$('cerrar').addEventListener('click', () => hud.classList.remove('on'));
 </script>
 </body></html>
