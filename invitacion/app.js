@@ -35,10 +35,53 @@
   const $ = id => document.getElementById(id);
   function aviso(t) { toast.textContent = t; toast.classList.add('on'); clearTimeout(aviso.t); aviso.t = setTimeout(() => toast.classList.remove('on'), 4200); }
 
+
+  /* ---------- Control por voz (opcional): "abrir", "sí", "no" ---------- */
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  function norm(t) { return t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zñ ]/g, ' ').trim(); }
+  function interpretar(texto) {
+    const p = norm(texto).split(/\s+/);
+    const tiene = (...ws) => ws.some(w => p.includes(w));
+    if (tiene('no', 'rechazo', 'paso')) return 'NO';
+    if (tiene('si', 'voy', 'confirmo', 'acepto', 'dale', 'claro')) return 'SI';
+    if (tiene('abrir', 'abri', 'abre', 'abrila', 'abrilo', 'regalo', 'caja')) return 'ABRIR';
+    return null;
+  }
+  function montarVoz(ui, modalAbierto) {
+    if (!SR) return;
+    const b = document.createElement('button'); b.id = 'inv-voz'; b.textContent = '🎤 VOZ';
+    b.style.cssText = "position:fixed;left:12px;bottom:14px;z-index:55;padding:10px 14px;border-radius:22px;border:2px solid #ff2bd6;background:#12062acc;color:#fff;font:700 13px 'Segoe UI',sans-serif;letter-spacing:.12em;cursor:pointer";
+    document.body.appendChild(b);
+    let rec = null, activo = false;
+    function ejecutar(texto) {
+      aviso('Escuché: "' + texto + '"');
+      if (modalAbierto()) return;                      // mientras escribe su nombre no interpretamos nada
+      const c = interpretar(texto); if (!c) return;
+      if (c === 'ABRIR') { if (!ui.abrir()) return; }
+      else if (!ui.responder(c)) aviso('Primero abrí la caja y esperá a que aparezca SÍ / NO.');
+    }
+    window.__vozSimular = ejecutar;                    // para pruebas sin micrófono
+    function iniciar() {
+      rec = new SR(); rec.lang = 'es-AR'; rec.continuous = true; rec.interimResults = false;
+      rec.onresult = e => { for (let i = e.resultIndex; i < e.results.length; i++) if (e.results[i].isFinal) ejecutar(e.results[i][0].transcript); };
+      rec.onend = () => { if (activo) try { rec.start(); } catch (_) {} };
+      rec.onerror = e => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { activo = false; b.textContent = '🎤 VOZ'; aviso('Permití el micrófono para usar la voz.'); } };
+      rec.start();
+    }
+    b.onclick = () => {
+      activo = !activo;
+      if (activo) { b.textContent = '🎤 ESCUCHANDO…'; b.style.background = '#ff2bd6'; aviso('Decí "abrir", "sí" o "no"'); try { iniciar(); } catch (_) {} }
+      else { b.textContent = '🎤 VOZ'; b.style.background = '#12062acc'; try { rec.stop(); } catch (_) {} }
+    };
+  }
+
   window.montarApp = function (target, o) {
     o = o || {}; const cfg = window.CONFIG; let enviado = false, ocupado = false, actual = null;
     if (cfg.colores && cfg.colores.cian) modal.style.setProperty('--ac', cfg.colores.cian);
     const ui = crearInvitacion(target, cfg, { sinCache: o.sinCache, onRespuesta: abrir });
+
+    const iniciarVoz = () => montarVoz(ui, () => modal.classList.contains('on'));
+    if (document.body) iniciarVoz(); else document.addEventListener('DOMContentLoaded', iniciarVoz);
 
     function abrir(resp) {
       if (enviado) { aviso('Ya registramos tu respuesta. ¡Gracias!'); return; }

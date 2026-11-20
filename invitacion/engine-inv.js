@@ -386,6 +386,11 @@
       vivo = false; clearInterval(intervalo); timers.forEach(clearTimeout); texs.forEach(t => t.dispose());
       if (grupo.parentNode) grupo.parentNode.removeChild(grupo);
     }
-    return { emitir, destruir, mostrarResultado };
+    function responder(valor) {                        // lo usa el control por voz: igual que tocar SÍ / NO
+      if (respondida || conf.ent.getAttribute('visible') !== true) return false;
+      pulsar(valor === 'SI' ? bSi : bNo, valor); return true;
+    }
+    function abrir() { if (!iniciada || abierta) return false; abrirCaja(); return true; }
+    return { emitir, destruir, mostrarResultado, responder, abrir };
   };
 })();
