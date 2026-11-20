@@ -24,9 +24,10 @@
     const CI = rgb(COL.cian), MA = rgb(COL.magenta);
     const AS = +cfg.aspecto || 0.571, hh = AS / 2, esc = +cfg.escala || 1;
     const RG = cfg.regalo && cfg.regalo.activa !== false && cfg.regalo.archivo !== "" ? cfg.regalo : null;
+    const RR = cfg.regalo || {}, REIN_RES = RR.reinicioSeg === undefined ? 10 : +RR.reinicioSeg, REIN_IDLE = RR.inactividadSeg === undefined ? 15 : +RR.inactividadSeg;
     const SEG_AUTO = RG ? (+RG.autoAbrirSeg || 0) : 0, SEG_INV = (RG && +RG.invitacionSeg) || 8;
-    let vivo = true; const texs = [], animados = [], paneles = {}, timers = [];
-    const later = (f, ms) => { const t = setTimeout(() => { if (vivo) f(); }, ms); timers.push(t); return t; };
+    let vivo = true, gen = 0; const texs = [], animados = [], paneles = {}, timers = [];
+    const later = (f, ms) => { const g = gen; const t = setTimeout(() => { if (vivo && g === gen) f(); }, ms); timers.push(t); return t; };
     const go = (e, ev) => { if (e.hasLoaded) e.emit(ev); else e.addEventListener('loaded', () => e.emit(ev), { once: true }); };
     const vis = (e, v) => e.setAttribute('visible', v ? 'true' : 'false');
 
@@ -172,7 +173,7 @@
     const bSi = panel('si', { w: 0.52, h: 0.2, cw: 520, ch: 200, pos: [-0.29, yBt, 0.22], delay: 350, clase: 'clickable', anim: true, dibujar: dibujarBoton(COL.verde, 'SÍ', 'VOY A IR') });
     const bNo = panel('no', { w: 0.52, h: 0.2, cw: 520, ch: 200, pos: [0.29, yBt, 0.22], delay: 500, clase: 'clickable', anim: true, dibujar: dibujarBoton(COL.rojo, 'NO', 'NO PUEDO') });
     function pulsar(b, valor) {
-      b.estado.pres = true; b.dibujar(); later(() => { b.estado.pres = false; b.dibujar(); }, 250);
+      clearTimeout(timerIdle); b.estado.pres = true; b.dibujar(); later(() => { b.estado.pres = false; b.dibujar(); }, 250);
       if (opts.onRespuesta) opts.onRespuesta(valor);
     }
     bSi.p.el.addEventListener('click', () => pulsar(bSi, 'SI'));
@@ -196,7 +197,7 @@
     });
 
     /* ---------- Secuencia ---------- */
-    let invVisible = false, confEmitida = false, respondida = false, iniciada = false, abierta = false, timerAuto = null, timerInv = null;
+    let invVisible = false, confEmitida = false, respondida = false, iniciada = false, abierta = false, timerAuto = null, timerInv = null, timerIdle = null, ultimo = null;
 
     let cajaV = 1;                                       // la caja se atenúa mientras la invitación está a la vista
     function cajaOp(v) {
@@ -205,23 +206,26 @@
     }
     function sacarInvitacion() {
       cajaOp(0.2); vis(inv.ent, true); go(inv.ent, 'sale'); invVisible = true; doc.estado.abierta = true;
-      clearTimeout(timerInv); timerInv = later(guardar, SEG_INV * 1000);
+      clearTimeout(timerIdle); clearTimeout(timerInv); timerInv = later(guardar, SEG_INV * 1000);
     }
+    function armarReposo(seg) { clearTimeout(timerIdle); if (seg > 0) timerIdle = later(reiniciar, seg * 1000); }
     function guardar() {
       if (!invVisible) return; invVisible = false; clearTimeout(timerInv); doc.estado.abierta = false; doc.dibujar();
       go(inv.ent, 'guarda'); cajaOp(1);
       later(() => {
         vis(inv.ent, false);
         vis(doc.ent, true); doc.dibujar(); go(doc.ent, 'aparecer');
-        if (!confEmitida && !respondida) {
+        if (respondida) {                               // ya respondió antes: muestra su respuesta registrada
+          later(() => { if (ultimo) mostrarResultado(ultimo); }, 500);
+        } else if (!confEmitida) {
           confEmitida = true;
-          later(() => { [conf, bSi, bNo].forEach(p => { vis(p.ent, true); go(p.ent, 'aparecer'); }); }, 500);
-        }
+          later(() => { [conf, bSi, bNo].forEach(p => { vis(p.ent, true); go(p.ent, 'aparecer'); }); armarReposo(REIN_IDLE); }, 500);
+        } else armarReposo(REIN_IDLE);                  // reabrió y volvió a guardar sin responder: se rearma el reposo
       }, 780);
     }
     function reabrir() {
       cajaOp(0.2); invVisible = true; doc.estado.abierta = true; doc.dibujar(); vis(inv.ent, true); go(inv.ent, 'reabre');
-      clearTimeout(timerInv); timerInv = later(guardar, SEG_INV * 1000);
+      clearTimeout(timerIdle); clearTimeout(timerInv); timerInv = later(guardar, SEG_INV * 1000);
     }
     inv.p.el.addEventListener('click', () => guardar());
     doc.p.el.addEventListener('click', () => { if (invVisible) guardar(); else reabrir(); });
@@ -333,9 +337,9 @@
       cajaClick.addEventListener('click', abrir); hint.p.el.addEventListener('click', abrir);
     }
     function tween(dur, fn, fin) {
-      const t0 = performance.now();
+      const t0 = performance.now(), g = gen;
       (function paso(now) {
-        if (!vivo) return;
+        if (!vivo || g !== gen) return;
         const k = Math.min(1, Math.max(0, (now - t0) / dur)); fn(k);
         if (k < 1) requestAnimationFrame(paso); else if (fin) fin();
       })(t0);
@@ -353,7 +357,7 @@
         ring.setAttribute('material', 'shader: flat; color: ' + COL.magenta + '; transparent: true; opacity: 0.9; blending: additive; depthWrite: false');
         ring.setAttribute('animation__s', 'property: scale; from: 0.2 0.2 0.2; to: 2.8 2.8 2.8; dur: 800; easing: easeOutQuad');
         ring.setAttribute('animation__o', 'property: material.opacity; from: 0.9; to: 0; dur: 800');
-        grupo.appendChild(ring); later(() => { if (ring.parentNode) ring.parentNode.removeChild(ring); }, 1000);
+        grupo.appendChild(ring); setTimeout(() => { if (ring.parentNode) ring.parentNode.removeChild(ring); }, 1000);
       }, 550);
       later(sacarInvitacion, 800);                      // la invitación sale de la caja
       later(() => {                                     // el haz se apaga; la caja queda siempre en el centro
@@ -377,11 +381,32 @@
       } else abrirCaja();
     }
     function mostrarResultado(d) {
-      respondida = true;
+      respondida = true; ultimo = d; armarReposo(REIN_RES);
       [conf, bSi, bNo].forEach(p => vis(p.ent, false));
       res.estado.nombre = d.nombre; res.estado.respuesta = d.respuesta; res.dibujar();
       vis(res.ent, true); go(res.ent, 'abrir');
     }
+    function reiniciar() {                             // vuelve todo al principio: la caja se CIERRA a la vista
+      if (!vivo) return; gen++;
+      clearTimeout(timerAuto); clearTimeout(timerInv); clearTimeout(timerIdle);
+      [inv, doc, conf, bSi, bNo, res].forEach(p => vis(p.ent, false));
+      doc.estado.abierta = false; invVisible = false; confEmitida = false;
+      if (!RG) { abierta = false; iniciada = false; emitir(); return; }
+      abierta = true;                                  // mientras se cierra no se puede volver a abrir
+      vis(beam, false); beam.removeAttribute('animation__fade'); beam.setAttribute('scale', '1 0.01 1');
+      const a0 = cajaV; cajaV = 1;
+      tween(700, k => cajaMats.forEach(m => { m.opacity = m.userData.base * (a0 + (1 - a0) * k); }));
+      const ini = flaps.map(f => f.fl.rotation.x);
+      const orden = [2, 0, 1, 3];                       // costados primero; las solapas grandes tapan al final
+      const cierre = (f, desde, ret) => later(() => tween(850, k => { const e = k * k * (3 - 2 * k); f.fl.rotation.x = desde * (1 - e); }), ret);
+      flaps.forEach((f, i) => cierre(f, ini[i], (i % 2 === 1 ? 0 : 450) + (i === 0 ? 120 : 0)));
+      later(() => {                                    // caja cerrada del todo: vuelve el cartel
+        flaps.forEach((f, i) => { f.fl.rotation.x = 0; if (i % 2 === 1) f.pivot.visible = false; });
+        abierta = false; vis(hint.ent, true); go(hint.ent, 'caja');
+        if (SEG_AUTO > 0) timerAuto = later(abrirCaja, SEG_AUTO * 1000);
+      }, 1500);
+    }
+    function reanudarReposo() { if (!respondida && confEmitida) armarReposo(REIN_IDLE); }
     function destruir() {
       vivo = false; clearInterval(intervalo); timers.forEach(clearTimeout); texs.forEach(t => t.dispose());
       if (grupo.parentNode) grupo.parentNode.removeChild(grupo);
@@ -391,6 +416,6 @@
       pulsar(valor === 'SI' ? bSi : bNo, valor); return true;
     }
     function abrir() { if (!iniciada || abierta) return false; abrirCaja(); return true; }
-    return { emitir, destruir, mostrarResultado, responder, abrir };
+    return { emitir, destruir, mostrarResultado, responder, abrir, reiniciar, reanudarReposo };
   };
 })();
