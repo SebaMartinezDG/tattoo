@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Invitación AR</title>
+<script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+<style>body{margin:0}</style></head>
+<body>
+<a-scene mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 1; missTolerance: 10;" color-space="sRGB"
+  renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false"
+  device-orientation-permission-ui="enabled: false">
+  <a-camera position="0 0 0" look-controls="enabled: false"
+    cursor="fuse: false; rayOrigin: mouse" raycaster="far: 10000; objects: .clickable"></a-camera>
+  <a-entity id="target" mindar-image-target="targetIndex: 0"></a-entity>
+</a-scene>
+<script>
+function cargar(src) {   // siempre "fresco": evita el problema de la caché
+  return new Promise((ok, no) => {
+    const s = document.createElement('script'); s.src = src + '?t=' + Date.now();
+    s.onload = ok; s.onerror = () => no(src); document.body.appendChild(s);
+  });
+}
+cargar('config.js').then(() => cargar('engine-inv.js')).then(() => cargar('app.js')).then(() => {
+  const target = document.getElementById('target');
+  const ui = montarApp(target, { sinCache: true });
+  let perdidoEn = -99;
+  target.addEventListener('targetLost', () => { perdidoEn = performance.now() / 1000; });
+  target.addEventListener('targetFound', () => { if (performance.now() / 1000 - perdidoEn > 1.5) ui.emitir(); });
+}).catch(f => console.error('No se pudo cargar', f));
+</script>
+</body></html>

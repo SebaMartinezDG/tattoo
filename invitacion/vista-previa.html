@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vista previa · Invitación AR</title>
+<script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+<script src="config.js"></script>
+<script src="engine-inv.js"></script>
+<script src="app.js"></script>
+<style>
+  html,body{margin:0;height:100%;background:#0b0618;color:#d7f6fb;font:14px 'Segoe UI',system-ui,sans-serif}
+  #wrap{position:absolute;inset:0}
+  #barra{position:fixed;left:10px;top:10px;z-index:20;display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:8px 12px;border:1px solid #00e5ff66;border-radius:10px;background:#0a0620e6;font-size:12px}
+  #barra label{display:flex;gap:6px;align-items:center} #barra input[type=range]{width:110px;accent-color:#00e5ff}
+  .btn{padding:6px 10px;border:1px solid #00e5ff;border-radius:6px;background:#00e5ff18;color:#e8fdff;cursor:pointer;font:inherit}
+</style></head>
+<body>
+<div id="barra">
+  <b style="color:#00e5ff">VISTA PREVIA</b>
+  <label>Girar <input id="yaw" type="range" min="-70" max="70" value="0"></label>
+  <label>Inclinar <input id="pitch" type="range" min="-70" max="70" value="-25"></label>
+  <label>Zoom <input id="zoom" type="range" min="1.2" max="6" step="0.05" value="2.6"></label>
+  <button class="btn" id="play">▶ Reproducir</button>
+  <label class="btn">Tu tarjeta… <input id="file" type="file" accept="image/*" hidden></label>
+</div>
+<div id="wrap">
+<a-scene embedded vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false"
+         renderer="colorManagement: true; antialias: true" color-space="sRGB" background="color: #0b0618">
+  <a-entity id="rig" position="0 0 2.6">
+    <a-camera position="0 0 0" look-controls="enabled: false" wasd-controls="enabled: false"
+              cursor="fuse: false; rayOrigin: mouse" raycaster="far: 100; objects: .clickable"></a-camera>
+  </a-entity>
+  <a-entity id="vista" rotation="-25 0 0">
+    <a-plane id="tarjeta" width="1" height="0.571" material="shader: flat; color: #15122e"></a-plane>
+    <a-entity id="target"></a-entity>
+  </a-entity>
+</a-scene>
+</div>
+<script>
+const $ = id => document.getElementById(id), THREE = AFRAME.THREE;
+const tarjeta = $('tarjeta');
+function ponerTarjeta(src) {
+  const im = new Image(); im.onload = () => {
+    const mesh = tarjeta.getObject3D('mesh'), tex = new THREE.Texture(im); tex.colorSpace = THREE.SRGBColorSpace; tex.needsUpdate = true;
+    tarjeta.setAttribute('height', (im.height / im.width).toFixed(4)); mesh.material.map = tex; mesh.material.color.set('#fff'); mesh.material.needsUpdate = true;
+  }; im.src = src;
+}
+function vista() { $('vista').setAttribute('rotation', $('pitch').value + ' ' + $('yaw').value + ' 0'); $('rig').setAttribute('position', '0 0 ' + $('zoom').value); }
+['yaw', 'pitch', 'zoom'].forEach(i => $(i).oninput = vista);
+$('file').onchange = e => { if (e.target.files[0]) ponerTarjeta(URL.createObjectURL(e.target.files[0])); };
+let ui;
+function arrancar() { ui = montarApp($('target'), {}); setTimeout(() => ui.emitir(), 300); }
+$('play').onclick = () => { ui.destruir(); arrancar(); };
+const esc = document.querySelector('a-scene');
+const ini = () => { vista(); arrancar(); };
+if (esc.hasLoaded) ini(); else esc.addEventListener('loaded', ini);
+</script>
+</body></html>
